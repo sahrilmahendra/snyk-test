@@ -1,0 +1,29 @@
+name: Snyk Code Scan (Golang)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  snyk:
+    name: Run Snyk Code Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Snyk Code Scan
+        run: snyk code test
