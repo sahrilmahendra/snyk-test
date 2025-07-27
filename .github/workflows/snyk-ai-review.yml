@@ -18,7 +18,7 @@ jobs:
 
       - name: Run Snyk Code Test with JSON output
         id: snyk_scan
-        run: snyk code test --json > snyk-result.json
+        run: snyk code test --json > snyk-result.json || true
 
       - name: Run Go Fix Suggestion Script
         env:
