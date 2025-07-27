@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type SnykIssue struct {
@@ -99,7 +99,7 @@ func main() {
 	}
 
 	filePath := os.Args[1]
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		log.Fatalf("Failed to read file: %v", err)
 	}
@@ -122,7 +122,7 @@ func main() {
 		}
 
 		prompt := fmt.Sprintf(
-			"You are a senior software security engineer. Review the following vulnerable Go code snippet and provide a detailed explanation and fix suggestion:\n\n%s",
+			"You are a senior software security engineer. Review the following vulnerable Golang code snippet and provide a detailed explanation and fix suggestion:\n\n%s",
 			snippet,
 		)
 
@@ -135,5 +135,7 @@ func main() {
 		}
 
 		fmt.Printf("ChatGPT Suggestion:\n%s\n\n", suggestion)
+
+		time.Sleep(5 * time.Second)
 	}
 }
