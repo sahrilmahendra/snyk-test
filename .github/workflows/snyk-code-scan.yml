@@ -1,29 +1,26 @@
-name: Snyk Code Scan (Golang)
+name: Snyk Code + AI Fix Suggestion
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:
-  snyk:
-    name: Run Snyk Code Analysis
+  snyk-ai-review:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
+      - uses: actions/checkout@v3
 
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      - name: Authenticate Snyk
+      - name: Authenticate Snyk CLI
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
-      - name: Run Snyk Code Scan
-        run: snyk code test
+      - name: Run Snyk Code Test with JSON output
+        id: snyk_scan
+        run: snyk code test --json > snyk-result.json
+
+      - name: Run Go Fix Suggestion Script
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: go run scripts/fix_suggestion.go snyk-result.json
