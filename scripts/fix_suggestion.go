@@ -1,23 +1,38 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
-type SnykIssue struct {
-	Title       string `json:"title"`
-	CodeSnippet string `json:"codeSnippet"`
-}
-
-type SnykResult struct {
-	Issues []SnykIssue `json:"issues"`
+type SarifResult struct {
+	Runs []struct {
+		Results []struct {
+			Message struct {
+				Text string `json:"text"`
+			} `json:"message"`
+			Locations []struct {
+				PhysicalLocation struct {
+					ArtifactLocation struct {
+						URI string `json:"uri"`
+					} `json:"artifactLocation"`
+					Region struct {
+						StartLine   int `json:"startLine"`
+						EndLine     int `json:"endLine"`
+						StartColumn int `json:"startColumn"`
+						EndColumn   int `json:"endColumn"`
+					} `json:"region"`
+				} `json:"physicalLocation"`
+			} `json:"locations"`
+		} `json:"results"`
+	} `json:"runs"`
 }
 
 type OpenAIRequest struct {
@@ -44,7 +59,10 @@ func callOpenAI(apiKey, prompt string) (string, error) {
 	reqBody := OpenAIRequest{
 		Model: "gpt-4o-mini",
 		Messages: []Message{
-			{Role: "user", Content: prompt},
+			{
+				Role:    "user",
+				Content: prompt,
+			},
 		},
 		MaxTokens:   500,
 		Temperature: 0.2,
@@ -55,7 +73,7 @@ func callOpenAI(apiKey, prompt string) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(string(bodyBytes)))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return "", err
 	}
@@ -75,6 +93,10 @@ func callOpenAI(apiKey, prompt string) (string, error) {
 		return "", err
 	}
 
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("OpenAI API error: %s", string(respBytes))
+	}
+
 	var openAIResp OpenAIResponse
 	err = json.Unmarshal(respBytes, &openAIResp)
 	if err != nil {
@@ -82,10 +104,29 @@ func callOpenAI(apiKey, prompt string) (string, error) {
 	}
 
 	if len(openAIResp.Choices) == 0 {
-		return "", fmt.Errorf("no choices returned from OpenAI")
+		return "", fmt.Errorf("no choices in OpenAI response")
 	}
 
 	return openAIResp.Choices[0].Message.Content, nil
+}
+
+func extractLines(filename string, start, end int) string {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		log.Printf("Failed to read file %s: %v\n", filename, err)
+		return ""
+	}
+
+	lines := strings.Split(string(content), "\n")
+	if start < 1 || start > len(lines) {
+		return ""
+	}
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	snippet := lines[start-1 : end]
+	return strings.Join(snippet, "\n")
 }
 
 func main() {
@@ -99,41 +140,56 @@ func main() {
 	}
 
 	filePath := os.Args[1]
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		log.Fatalf("Failed to read file: %v", err)
 	}
 
-	var snykResult SnykResult
-	err = json.Unmarshal(data, &snykResult)
+	var result SarifResult
+	err = json.Unmarshal(data, &result)
 	if err != nil {
 		log.Fatalf("Failed to parse JSON: %v", err)
 	}
 
-	if len(snykResult.Issues) == 0 {
+	if len(result.Runs) == 0 || len(result.Runs[0].Results) == 0 {
 		fmt.Println("No issues found by Snyk Code.")
 		return
 	}
 
-	for _, issue := range snykResult.Issues {
-		snippet := issue.CodeSnippet
-		if snippet == "" {
-			snippet = "Code snippet not available."
-		}
-
-		prompt := fmt.Sprintf(
-			"You are a senior software security engineer. Review the following vulnerable Go code snippet and provide a detailed explanation and fix suggestion:\n\n%s",
-			snippet,
-		)
-
-		fmt.Printf("Issue: %s\n", issue.Title)
-
-		suggestion, err := callOpenAI(apiKey, prompt)
-		if err != nil {
-			fmt.Printf("Failed to get suggestion from OpenAI: %v\n", err)
+	for _, issue := range result.Runs[0].Results {
+		msg := issue.Message.Text
+		if len(issue.Locations) == 0 {
+			fmt.Printf("Issue: %s\nNo location info available.\n\n", msg)
 			continue
 		}
 
-		fmt.Printf("ChatGPT Suggestion:\n%s\n\n", suggestion)
+		loc := issue.Locations[0].PhysicalLocation
+		file := loc.ArtifactLocation.URI
+		startLine := loc.Region.StartLine
+		endLine := loc.Region.EndLine
+
+		codeSnippet := extractLines(file, startLine, endLine)
+		if codeSnippet == "" {
+			codeSnippet = "<code snippet not available>"
+		}
+
+		prompt := fmt.Sprintf(
+			"You are a senior software security engineer. Review this vulnerable Go code snippet and provide detailed explanation and fix suggestion:\n\nFile: %s\nLines: %d-%d\n\n%s\n\nIssue: %s",
+			file, startLine, endLine, codeSnippet, msg,
+		)
+
+		fmt.Printf("Issue detected in %s lines %d-%d: %s\n", file, startLine, endLine, msg)
+		fmt.Println("Requesting fix suggestion from OpenAI...")
+
+		suggestion, err := callOpenAI(apiKey, prompt)
+		if err != nil {
+			fmt.Printf("Failed to get suggestion: %v\n\n", err)
+		} else {
+			fmt.Println("Fix suggestion:")
+			fmt.Println(suggestion)
+			fmt.Println(strings.Repeat("-", 80))
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 }
