@@ -20,12 +20,7 @@ jobs:
 #        id: snyk_scan
 #        run: snyk code test --json > snyk-result.json || true
 
-#      - name: Run Go Fix Suggestion Script using Open AI
-#        env:
-#          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-#        run: go run scripts/fix_suggestion.go snyk-result.json
-
       - name: Run Go Fix Suggestion Script using AI
         env:
-          OPENAI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: go run scripts/fix_suggestion.go snyk-result.json
