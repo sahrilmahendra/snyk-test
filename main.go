@@ -3,9 +3,8 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"net/http"
-
 	_ "github.com/go-sql-driver/mysql"
+	"net/http"
 )
 
 func main() {
