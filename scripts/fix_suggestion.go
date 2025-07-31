@@ -1,17 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
+	"snyk/ai"
 	"strings"
 	"time"
 )
 
+// SarifResult JSON result from snyk code
 type SarifResult struct {
 	Runs []struct {
 		Results []struct {
@@ -33,81 +32,6 @@ type SarifResult struct {
 			} `json:"locations"`
 		} `json:"results"`
 	} `json:"runs"`
-}
-
-type OpenAIRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	MaxTokens   int       `json:"max_tokens"`
-	Temperature float64   `json:"temperature"`
-}
-
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type OpenAIResponse struct {
-	Choices []struct {
-		Message Message `json:"message"`
-	} `json:"choices"`
-}
-
-func callOpenAI(apiKey, prompt string) (string, error) {
-	url := "https://api.openai.com/v1/chat/completions"
-
-	reqBody := OpenAIRequest{
-		Model: "gpt-4o-mini",
-		Messages: []Message{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
-		MaxTokens:   500,
-		Temperature: 0.2,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("OpenAI API error: %s", string(respBytes))
-	}
-
-	var openAIResp OpenAIResponse
-	err = json.Unmarshal(respBytes, &openAIResp)
-	if err != nil {
-		return "", err
-	}
-
-	if len(openAIResp.Choices) == 0 {
-		return "", fmt.Errorf("no choices in OpenAI response")
-	}
-
-	return openAIResp.Choices[0].Message.Content, nil
 }
 
 func extractLines(filename string, start, end int) string {
@@ -134,9 +58,9 @@ func main() {
 		log.Fatalf("Usage: %s <snyk-result.json>", os.Args[0])
 	}
 
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		log.Fatal("OPENAI_API_KEY environment variable is required")
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if len(apiKey) == 0 {
+		log.Fatal("API_KEY environment variable is required")
 	}
 
 	filePath := os.Args[1]
@@ -174,14 +98,14 @@ func main() {
 		}
 
 		prompt := fmt.Sprintf(
-			"You are a senior software security engineer. Review this vulnerable Go code snippet and provide detailed explanation and fix suggestion:\n\nFile: %s\nLines: %d-%d\n\n%s\n\nIssue: %s",
-			file, startLine, endLine, codeSnippet, msg,
+			"You are a senior software engineer. Review this vulnerable Golang code snippet and provide detailed explanation and fix suggestion:\n\nFile: %s\n\n%s\n\nIssue: %s",
+			file, codeSnippet, msg,
 		)
 
 		fmt.Printf("Issue detected in %s lines %d-%d: %s\n", file, startLine, endLine, msg)
 		fmt.Println("Requesting fix suggestion from OpenAI...")
 
-		suggestion, err := callOpenAI(apiKey, prompt)
+		suggestion, err := ai.CallGeminiAI(apiKey, prompt)
 		if err != nil {
 			fmt.Printf("Failed to get suggestion: %v\n\n", err)
 		} else {
@@ -190,6 +114,6 @@ func main() {
 			fmt.Println(strings.Repeat("-", 80))
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(62 * time.Second)
 	}
 }
