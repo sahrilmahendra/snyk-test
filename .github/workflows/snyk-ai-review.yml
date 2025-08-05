@@ -20,7 +20,10 @@ jobs:
 #        id: snyk_scan
 #        run: snyk code test --json > snyk-result.json || true
 
-      - name: Run Go Fix Suggestion Script using AI
+      - name: Run Go Fix Suggestion Script using AI and Post Comment
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: go run scripts/fix_suggestion.go snyk-result.json

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"snyk/ai"
 	"strings"
@@ -51,6 +53,30 @@ func extractLines(filename string, start, end int) string {
 
 	snippet := lines[start-1 : end]
 	return strings.Join(snippet, "\n")
+}
+
+func postPRComment(comment string) {
+	repo := os.Getenv("GITHUB_REPOSITORY")
+	pr := os.Getenv("PR_NUMBER")
+	token := os.Getenv("GITHUB_TOKEN")
+
+	url := fmt.Sprintf("https://api.github.com/repos/%s/issues/%s/comments", repo, pr)
+
+	data := map[string]string{"body": comment}
+	body, _ := json.Marshal(data)
+
+	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Failed to post comment:", err)
+	} else {
+		defer resp.Body.Close()
+		fmt.Println("Posted suggestion to PR.")
+	}
 }
 
 func main() {
@@ -110,7 +136,8 @@ func main() {
 			fmt.Printf("Failed to get suggestion: %v\n\n", err)
 		} else {
 			fmt.Println("Fix suggestion:")
-			fmt.Println(suggestion)
+			comment := fmt.Sprintf("🔍 **AI Fix Suggestion** for `%s` at line %d-%d:\n\n%s", file, startLine, endLine, suggestion)
+			postPRComment(comment)
 			fmt.Println(strings.Repeat("-", 80))
 		}
 
