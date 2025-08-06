@@ -1,0 +1,26 @@
+name: Snyk Code + AI Fix Suggestion
+
+on:
+  pull_request:
+
+jobs:
+  snyk-ai-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate Snyk CLI
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Snyk Code Test with JSON output
+        id: snyk_scan
+        run: snyk code test --json > snyk-result.json || true
+
+      - name: Run Go Fix Suggestion Script using AI
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: go run scripts/fix_suggestion.go snyk-result.json
