@@ -58,11 +58,6 @@ func main() {
 		log.Fatalf("Usage: %s <snyk-result.json>", os.Args[0])
 	}
 
-	apiKey := os.Getenv("GEMINI_API_KEY")
-	if len(apiKey) == 0 {
-		log.Fatal("API_KEY environment variable is required")
-	}
-
 	filePath := os.Args[1]
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -78,6 +73,11 @@ func main() {
 	if len(result.Runs) == 0 || len(result.Runs[0].Results) == 0 {
 		fmt.Println("No issues found by Snyk Code.")
 		return
+	}
+
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if len(apiKey) == 0 {
+		log.Fatal("API_KEY environment variable is required")
 	}
 
 	for _, issue := range result.Runs[0].Results {
@@ -102,8 +102,8 @@ func main() {
 			file, codeSnippet, msg,
 		)
 
-		fmt.Printf("Issue detected in %s lines %d-%d: %s\n", file, startLine, endLine, msg)
-		fmt.Println("Requesting fix suggestion from OpenAI...")
+		fmt.Printf("Issue detected in %s lines %d-%d, column %d-%d: %s\n", file, startLine, endLine, loc.Region.StartColumn, loc.Region.EndColumn, msg)
+		fmt.Println("Requesting fix suggestion from AI...")
 
 		suggestion, err := ai.CallGeminiAI(apiKey, prompt)
 		if err != nil {
@@ -111,7 +111,7 @@ func main() {
 		} else {
 			fmt.Println("Fix suggestion:")
 			fmt.Println(suggestion)
-			fmt.Println(strings.Repeat("-", 80))
+			fmt.Println(strings.Repeat("-", 90))
 		}
 
 		time.Sleep(62 * time.Second)
