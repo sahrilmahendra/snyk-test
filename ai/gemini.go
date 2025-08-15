@@ -31,7 +31,7 @@ func CallGeminiAI(apiKey, prompt string) (string, error) {
 		log.Fatal(err)
 	}
 
-	var thinkingBudget int32 = 0
+	var thinkingBudget int32
 
 	result, err := client.Models.GenerateContent(
 		ctx,
