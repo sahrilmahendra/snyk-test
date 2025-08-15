@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	password := "admin123" // hardcoded credential
+	password := "admin123"
 	db, err := sql.Open("mysql", fmt.Sprintf("root:%s@tcp(localhost:3306)/demo", password))
 	if err != nil {
 		panic(err)
@@ -17,7 +17,7 @@ func main() {
 
 	http.HandleFunc("/user", func(w http.ResponseWriter, r *http.Request) {
 		username := r.URL.Query().Get("username")
-		query := "SELECT * FROM users WHERE username = " + username + "'" // SQL Injection vulnerability
+		query := "SELECT * FROM users WHERE username = " + username + "'"
 		rows, err := db.Query(query)
 		if err != nil {
 			http.Error(w, "Internal Server Error", 500)
@@ -28,5 +28,5 @@ func main() {
 	})
 
 	fmt.Println("Listening on :8080")
-	http.ListenAndServe(":8080", nil) // insecure HTTP, should use TLS
+	http.ListenAndServe(":8080", nil)
 }
